@@ -177,6 +177,16 @@ lspconfig.csharp_ls.setup({
     capabilities = cs_capabilities,
 })
 
+local function disable_incr(client)
+    client.resolved_capabilities.text_document_change = nil
+end
+
+lspconfig.csharp_ls.setup({
+    cmd = { vim.fn.expand("~/.dotnet/tools/csharp-ls") },
+    capabilities = capabilities,
+    on_attach = disable_incr,
+})
+
 ------------------------------------------------------------
 -- CMP (Autocomplete + Snippets + Copilot)
 ------------------------------------------------------------
