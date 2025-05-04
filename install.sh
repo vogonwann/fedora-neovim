@@ -59,6 +59,11 @@ unzip -o FiraCodeNerdFontMono-Regular.ttf
 fc-cache -fv
 cd ~
 
+echo "-> Setting up Neovim config..."
+mkdir -p ~/.config/nvim
+cp ./init.lua ~/.config/nvim/init.lua
+echo "Neovim config installed to ~/.config/nvim/init.lua"
+
 # All done
 echo ""
 echo "✅ DONE! Now start Neovim and run :PackerSync to install plugins!"
