@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 Starting Neovim Ultra AI + DOTNET + Vue + LazyGit setup 🚀"
+echo "🚀 Starting Neovim Ultra AI + DOTNET + Vue + LazyGit + Netcoredbg setup 🚀"
 
 # Update system
 echo "➡️ Updating system packages"
@@ -8,7 +8,7 @@ sudo dnf upgrade --refresh -y
 
 # Install Neovim + required system packages
 echo "➡️ Installing Neovim and essential tools"
-sudo dnf install -y neovim git curl gcc make ripgrep fd-find nodejs npm dotnet-sdk-9.0
+sudo dnf install -y neovim git curl gcc make ripgrep fd-find nodejs npm dotnet-sdk-9.0 unzip
 
 # Install packer.nvim for plugin management
 echo "➡️ Installing packer.nvim for Neovim"
@@ -53,20 +53,39 @@ fi
 # Install FiraCode Nerd Font (optional but nice)
 echo "➡️ Installing FiraCode Nerd Font"
 mkdir -p ~/.local/share/fonts
-curl -Lo ~/.local/share/fonts/FiraCodeNerdFontMono-Regular.ttf https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/FiraCode.zip
-cd ~/.local/share/fonts
-unzip -o FiraCodeNerdFontMono-Regular.ttf
+curl -Lo FiraCode.zip https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/FiraCode.zip
+unzip -o FiraCode.zip -d ~/.local/share/fonts
 fc-cache -fv
-cd ~
+rm FiraCode.zip
 
-echo "-> Setting up Neovim config..."
+# Install Netcoredbg debugger
+echo "➡️ Installing Netcoredbg (.NET debugger)"
+mkdir -p ~/Downloads/netcoredbg
+cd ~/Downloads/netcoredbg
+
+NETCOREDBG_VERSION="2.2.0-900"
+curl -L -o netcoredbg.tar.gz "https://github.com/Samsung/netcoredbg/releases/download/${NETCOREDBG_VERSION}/netcoredbg-linux-amd64.tar.gz"
+tar -xzf netcoredbg.tar.gz
+
+mkdir -p ~/.local/bin/netcoredbg
+cp -r netcoredbg/* ~/.local/bin/netcoredbg
+
+ln -sf ~/.local/bin/netcoredbg/netcoredbg ~/.local/bin/netcoredbg
+
+cd ~
+rm -rf ~/Downloads/netcoredbg
+
+echo "✅ Netcoredbg installed to ~/.local/bin/netcoredbg"
+
+# Setup Neovim config
+echo "➡️ Setting up Neovim config..."
 mkdir -p ~/.config/nvim
 cp ./init.lua ~/.config/nvim/init.lua
-echo "Neovim config installed to ~/.config/nvim/init.lua"
+echo "✅ Neovim config installed to ~/.config/nvim/init.lua"
 
-# All done
 echo ""
-echo "✅ DONE! Now start Neovim and run :PackerSync to install plugins!"
-echo "✅ If PATH issues for dotnet tools → restart terminal or run 'source ~/.bashrc' or 'source ~/.zshrc'"
-echo "✅ Happy coding, burke 🚀"
+echo "🎉 DONE! Everything installed!"
+echo "👉 Start Neovim and run :PackerSync to install plugins."
+echo "👉 If PATH issues for dotnet tools → restart terminal or run 'source ~/.bashrc' or 'source ~/.zshrc'"
+echo "👉 Happy hacking burke 🚀"
 
