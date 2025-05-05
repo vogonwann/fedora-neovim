@@ -27,7 +27,7 @@ require("packer").startup(function(use)
     use("nvim-lua/plenary.nvim")
     use("nvim-telescope/telescope.nvim")
     use("lewis6991/gitsigns.nvim")
-    use("nvim-treesitter/nvim-treesitter")
+    use({ "nvim-treesitter/nvim-treesitter", run = ":TSUpdate" })
     use("numToStr/Comment.nvim")
     use("nvim-lualine/lualine.nvim")
     use("akinsho/bufferline.nvim")
@@ -59,13 +59,11 @@ require("packer").startup(function(use)
     use("rcarriga/nvim-dap-ui")
     use("jay-babu/mason-nvim-dap.nvim")
     use("nvim-neotest/nvim-nio")
-    use("theHamsta/nvim-dap-virtual-text")
-
     if packer_bootstrap then require("packer").sync() end
 end)
 
 ------------------------------------------------------------
--- UI
+-- General UI
 ------------------------------------------------------------
 vim.o.number = true
 vim.o.relativenumber = true
@@ -73,6 +71,7 @@ vim.o.termguicolors = true
 vim.o.cursorline = true
 vim.o.signcolumn = "yes"
 vim.cmd("colorscheme gruvbox")
+vim.notify = require("notify")
 
 ------------------------------------------------------------
 -- Telescope
@@ -134,9 +133,10 @@ local capabilities = require("cmp_nvim_lsp").default_capabilities()
 
 lspconfig.volar.setup({ capabilities = capabilities })
 lspconfig.tailwindcss.setup({ capabilities = capabilities })
-
-local cs_capabilities = require("cmp_nvim_lsp").default_capabilities()
-lspconfig.csharp_ls.setup({ cmd = { vim.fn.expand("~/.dotnet/tools/csharp-ls") }, capabilities = cs_capabilities })
+lspconfig.csharp_ls.setup({
+    cmd = { vim.fn.expand("~/.dotnet/tools/csharp-ls") },
+    capabilities = capabilities,
+})
 
 ------------------------------------------------------------
 -- CMP + Copilot
@@ -177,7 +177,6 @@ require("null-ls").setup({
 ------------------------------------------------------------
 require("zen-mode").setup({})
 require("twilight").setup({})
-
 vim.keymap.set("n", "<leader>z", ":ZenMode<CR>")
 
 ------------------------------------------------------------
@@ -189,16 +188,9 @@ require("alpha").setup(require("alpha.themes.dashboard").config)
 -- Noice
 ------------------------------------------------------------
 require("noice").setup({})
-vim.notify = require("notify")
 
 ------------------------------------------------------------
--- DAP Virtual Text (pre DAP)
-------------------------------------------------------------
-vim.g.dap_virtual_text = true
-require("nvim-dap-virtual-text").setup({ enabled = true })
-
-------------------------------------------------------------
--- DAP
+-- DAP + DAP UI
 ------------------------------------------------------------
 local dap = require("dap")
 local dapui = require("dapui")
@@ -206,7 +198,7 @@ local dapui = require("dapui")
 dap.adapters.coreclr = {
     type = 'executable',
     command = vim.fn.expand("~/.local/bin/netcoredbg"),
-    args = {'--interpreter=vscode'}
+    args = { '--interpreter=vscode' }
 }
 
 dap.configurations.cs = {
