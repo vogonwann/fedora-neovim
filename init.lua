@@ -12,10 +12,7 @@ local ensure_packer = function()
     local fn = vim.fn
     local install_path = fn.stdpath("data") .. "/site/pack/packer/start/packer.nvim"
     if fn.empty(fn.glob(install_path)) > 0 then
-        fn.system({
-            "git", "clone", "--depth", "1",
-            "https://github.com/wbthomason/packer.nvim", install_path,
-        })
+        fn.system({ "git", "clone", "--depth", "1", "https://github.com/wbthomason/packer.nvim", install_path })
         vim.cmd([[packadd packer.nvim]])
         return true
     end
@@ -25,10 +22,7 @@ end
 local packer_bootstrap = ensure_packer()
 
 require("packer").startup(function(use)
-    -- Packer
     use("wbthomason/packer.nvim")
-
-    -- UI & Utils
     use("ellisonleao/gruvbox.nvim")
     use("nvim-lua/plenary.nvim")
     use("nvim-telescope/telescope.nvim")
@@ -46,14 +40,8 @@ require("packer").startup(function(use)
     use("kdheepak/lazygit.nvim")
     use("folke/trouble.nvim")
     use("MunifTanjim/nui.nvim")
-
-    -- Dashboard
     use("goolord/alpha-nvim")
-
-    -- AI
     use("zbirenbaum/copilot.lua")
-
-    -- LSP & Autocomplete
     use("neovim/nvim-lspconfig")
     use("williamboman/mason.nvim")
     use("williamboman/mason-lspconfig.nvim")
@@ -64,33 +52,27 @@ require("packer").startup(function(use)
     use("onsails/lspkind.nvim")
     use("roobert/tailwindcss-colorizer-cmp.nvim")
     use("nvimtools/none-ls.nvim")
-
-    use({
-    "folke/noice.nvim",
-    	requires = {
-            "MunifTanjim/nui.nvim",
-            "rcarriga/nvim-notify",
-        },
-    })
+    use({ "folke/noice.nvim", requires = { "MunifTanjim/nui.nvim", "rcarriga/nvim-notify" } })
     use("folke/zen-mode.nvim")
     use("folke/twilight.nvim")
+    use("mfussenegger/nvim-dap")
+    use("rcarriga/nvim-dap-ui")
+    use("jay-babu/mason-nvim-dap.nvim")
+    use("nvim-neotest/nvim-nio")
+    use("theHamsta/nvim-dap-virtual-text")
 
-    if packer_bootstrap then
-        require("packer").sync()
-    end
+    if packer_bootstrap then require("packer").sync() end
 end)
 
 ------------------------------------------------------------
--- General UI
+-- UI
 ------------------------------------------------------------
 vim.o.number = true
 vim.o.relativenumber = true
 vim.o.termguicolors = true
 vim.o.cursorline = true
 vim.o.signcolumn = "yes"
-
 vim.cmd("colorscheme gruvbox")
-vim.notify = require("notify")
 
 ------------------------------------------------------------
 -- Telescope
@@ -102,7 +84,7 @@ vim.keymap.set("n", "<leader>fg", ":Telescope live_grep<CR>")
 ------------------------------------------------------------
 -- Treesitter
 ------------------------------------------------------------
-require("nvim-treesitter.configs").setup { highlight = { enable = true } }
+require("nvim-treesitter.configs").setup({ highlight = { enable = true } })
 
 ------------------------------------------------------------
 -- Comment
@@ -146,234 +128,118 @@ vim.keymap.set("n", "<leader>xx", "<cmd>TroubleToggle<cr>")
 -- Mason + LSP
 ------------------------------------------------------------
 require("mason").setup()
-require("mason-lspconfig").setup {}
-
+require("mason-lspconfig").setup()
 local lspconfig = require("lspconfig")
 local capabilities = require("cmp_nvim_lsp").default_capabilities()
 
--- Volar
-lspconfig.volar.setup({
-    capabilities = capabilities,
-})
+lspconfig.volar.setup({ capabilities = capabilities })
+lspconfig.tailwindcss.setup({ capabilities = capabilities })
 
--- Tailwind
-lspconfig.tailwindcss.setup({
-    capabilities = capabilities,
-})
-
--- .NET / C#
-local cs_capabilities = vim.lsp.protocol.make_client_capabilities()
-cs_capabilities.textDocument.completion = {
-    completionItem = {
-        snippetSupport = true,
-    },
-    contextSupport = true,
-}
-cs_capabilities.textDocument.completion.triggerCharacters = { ".", ":", "<", '"', "'", "/", "@", " " }
-cs_capabilities = require("cmp_nvim_lsp").default_capabilities(cs_capabilities)
-
-lspconfig.csharp_ls.setup({
-    cmd = { vim.fn.expand("~/.dotnet/tools/csharp-ls") },
-    capabilities = cs_capabilities,
-})
-
-local function disable_incr(client)
-    client.resolved_capabilities.text_document_change = nil
-end
-
-lspconfig.csharp_ls.setup({
-    cmd = { vim.fn.expand("~/.dotnet/tools/csharp-ls") },
-    capabilities = capabilities,
-    on_attach = disable_incr,
-})
+local cs_capabilities = require("cmp_nvim_lsp").default_capabilities()
+lspconfig.csharp_ls.setup({ cmd = { vim.fn.expand("~/.dotnet/tools/csharp-ls") }, capabilities = cs_capabilities })
 
 ------------------------------------------------------------
--- CMP (Autocomplete + Snippets + Copilot)
+-- CMP + Copilot
 ------------------------------------------------------------
-require("tailwindcss-colorizer-cmp").setup({ color_square_width = 2 })
-
+require("tailwindcss-colorizer-cmp").setup()
 local cmp = require("cmp")
-
-local has_words_before = function()
-    local line, col = unpack(vim.api.nvim_win_get_cursor(0))
-    return col ~= 0 and vim.api.nvim_buf_get_lines(0, line - 1, line, true)[1]:sub(col, col):match("%s") == nil
-end
+local luasnip = require("luasnip")
 
 cmp.setup({
-    completion = { autocomplete = { "TextChanged" }, keyword_length = 3 },
-    snippet = { expand = function(args) require("luasnip").lsp_expand(args.body) end },
-
+    snippet = { expand = function(args) luasnip.lsp_expand(args.body) end },
     mapping = cmp.mapping.preset.insert({
         ["<Tab>"] = cmp.mapping(function(fallback)
-            if require("copilot.suggestion").is_visible() then
-                require("copilot.suggestion").accept()
-            elseif cmp.visible() then
-                cmp.select_next_item()
-            elseif has_words_before() then
-                cmp.complete()
-            else
-                fallback()
-            end
+            if require("copilot.suggestion").is_visible() then require("copilot.suggestion").accept()
+            elseif cmp.visible() then cmp.select_next_item()
+            else fallback() end
         end, { "i", "s" }),
-
-        ["<S-Tab>"] = cmp.mapping(function(fallback)
-            if cmp.visible() then
-                cmp.select_prev_item()
-            else
-                fallback()
-            end
-        end, { "i", "s" }),
-
         ["<CR>"] = cmp.mapping.confirm({ select = true }),
         ["<C-Space>"] = cmp.mapping.complete(),
-        ["<Esc>"] = cmp.mapping.close(),
     }),
-
-    sources = cmp.config.sources({
-        { name = "nvim_lsp" },
-        { name = "luasnip" },
-    }),
-
+    sources = cmp.config.sources({ { name = "nvim_lsp" }, { name = "luasnip" } }),
     formatting = { format = require("tailwindcss-colorizer-cmp").formatter },
 })
 
+require("copilot").setup({ suggestion = { enabled = true, auto_trigger = true } })
+
 ------------------------------------------------------------
--- Null-ls (Prettier + CSharpier)
+-- Null-ls
 ------------------------------------------------------------
-local null_ls = require("null-ls")
-null_ls.setup({
+require("null-ls").setup({
     sources = {
-        null_ls.builtins.formatting.prettier.with({ filetypes = { "javascript", "typescript", "vue", "json" } }),
-        null_ls.builtins.formatting.csharpier,
-    },
-    on_attach = function(client, bufnr)
-        if client.supports_method("textDocument/formatting") then
-            vim.api.nvim_create_autocmd("BufWritePre", {
-                buffer = bufnr,
-                callback = function() vim.lsp.buf.format({ bufnr = bufnr }) end,
-            })
-        end
-    end,
-})
-
-------------------------------------------------------------
--- Copilot
-------------------------------------------------------------
-require("copilot").setup({
-    suggestion = {
-        enabled = true,
-        auto_trigger = true,
-        debounce = 75,
-        keymap = {
-            accept = "<Tab>",
-            next = "<C-]>",
-            prev = "<C-[>",
-            dismiss = "<C-/>",
-        },
-    },
-    panel = { enabled = false },
-})
-
-------------------------------------------------------------
--- Alpha (Dashboard)
-------------------------------------------------------------
-local alpha = require("alpha")
-local dashboard = require("alpha.themes.dashboard")
-
-dashboard.section.header.val = {
-"      БУРКЕ Ultra AI Neovim Edition 🚀",
-" =====================================",
-"",
-}
-
-dashboard.section.buttons.val = {
-    dashboard.button("e", "📄 New file", ":ene <BAR> startinsert <CR>"),
-    dashboard.button("f", "🔍 Find file", ":Telescope find_files<CR>"),
-    dashboard.button("r", "🕑 Recent files", ":Telescope oldfiles<CR>"),
-    dashboard.button("q", "❌ Quit NVIM", ":qa<CR>"),
-}
-
-alpha.setup(dashboard.config)
-
-------------------------------------------------------------
--- Noice (Cmd popup + UI)
-------------------------------------------------------------
-require("noice").setup({
-    cmdline = {
-        enabled = true,
-        view = "cmdline_popup", -- adds popup style command line
-        format = {
-            cmdline = { icon = "" },
-            search_down = { icon = "🔍 " },
-            search_up = { icon = "🔍 " },
-        },
-    },
-    messages = {
-        enabled = true,
-    },
-    popupmenu = {
-        enabled = true,
-    },
-    notify = {
-        enabled = true,
-    },
-    lsp = {
-        progress = { enabled = true },
-        signature = { enabled = true },
-        hover = { enabled = true },
+        require("null-ls").builtins.formatting.prettier,
+        require("null-ls").builtins.formatting.csharpier,
     },
 })
 
-vim.keymap.set("n", "<leader>nl", function()
-    require("noice").cmd("last")
-end, { desc = "Noice Last Message" })
+------------------------------------------------------------
+-- Zen + Twilight
+------------------------------------------------------------
+require("zen-mode").setup({})
+require("twilight").setup({})
+
+vim.keymap.set("n", "<leader>z", ":ZenMode<CR>")
 
 ------------------------------------------------------------
--- Notify (pretty notifications)
+-- Alpha Dashboard
 ------------------------------------------------------------
+require("alpha").setup(require("alpha.themes.dashboard").config)
+
+------------------------------------------------------------
+-- Noice
+------------------------------------------------------------
+require("noice").setup({})
 vim.notify = require("notify")
-require("notify").setup({
-    background_colour = "#000000",
-})
 
 ------------------------------------------------------------
--- Zen Mode + Twilight (Focus Mode)
+-- DAP Virtual Text (pre DAP)
 ------------------------------------------------------------
-
-require("twilight").setup({
-    dimming = {
-        alpha = 0.25, -- how much to dim inactive portions of the code
-    },
-    context = 10, -- show 10 lines around the current line
-})
-
-require("zen-mode").setup({
-    window = {
-        backdrop = 0.95, -- dim the rest of the editor
-        width = 80,
-        height = 1,
-        options = {
-            number = false,
-            relativenumber = false,
-        },
-    },
-    plugins = {
-        twilight = { enabled = true }, -- automatically enable twilight when zen mode opens
-        gitsigns = { enabled = false },
-        tmux = { enabled = false },
-    },
-    on_open = function()
-        vim.cmd("echo '🧘 Focus time started...'")
-    end,
-    on_close = function()
-        vim.cmd("echo '🚀 Focus mode ended.'")
-    end,
-})
-
-vim.keymap.set("n", "<leader>z", ":ZenMode<CR>", { noremap = true, silent = true })
+vim.g.dap_virtual_text = true
+require("nvim-dap-virtual-text").setup({ enabled = true })
 
 ------------------------------------------------------------
--- Hot reload init.lua
+-- DAP
+------------------------------------------------------------
+local dap = require("dap")
+local dapui = require("dapui")
+
+dap.adapters.coreclr = {
+    type = 'executable',
+    command = vim.fn.expand("~/.local/bin/netcoredbg"),
+    args = {'--interpreter=vscode'}
+}
+
+dap.configurations.cs = {
+    {
+        type = "coreclr",
+        name = "Launch - netcoredbg",
+        request = "launch",
+        program = function()
+            return vim.fn.input('Path to dll: ', vim.fn.getcwd() .. '/bin/Debug/net7.0/', 'file')
+        end,
+    },
+}
+
+dapui.setup()
+
+dap.listeners.after.event_initialized["dapui_config"] = function() dapui.open() end
+dap.listeners.before.event_terminated["dapui_config"] = function() dapui.close() end
+dap.listeners.before.event_exited["dapui_config"] = function() dapui.close() end
+
+------------------------------------------------------------
+-- DAP Keymaps
+------------------------------------------------------------
+vim.keymap.set("n", "<F5>", function() dap.continue() end)
+vim.keymap.set("n", "<F10>", function() dap.step_over() end)
+vim.keymap.set("n", "<F11>", function() dap.step_into() end)
+vim.keymap.set("n", "<F12>", function() dap.step_out() end)
+vim.keymap.set("n", "<leader>b", function() dap.toggle_breakpoint() end)
+vim.keymap.set("n", "<leader>dr", function() dap.repl.toggle() end)
+vim.keymap.set("n", "<leader>dl", function() dap.run_last() end)
+vim.keymap.set("n", "<leader>du", function() dapui.toggle() end)
+
+------------------------------------------------------------
+-- Reload init.lua on save
 ------------------------------------------------------------
 vim.cmd([[
 augroup reload_vimrc
@@ -381,3 +247,4 @@ augroup reload_vimrc
   autocmd BufWritePost init.lua source <afile> | PackerCompile
 augroup END
 ]])
+
