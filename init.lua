@@ -1,4 +1,4 @@
-------------------------------------------------------------
+	------------------------------------------------------------
 -- Leader Key
 ------------------------------------------------------------
 vim.g.mapleader = " "
@@ -44,7 +44,10 @@ require("packer").startup(function(use)
     use("zbirenbaum/copilot.lua")
     use("neovim/nvim-lspconfig")
     use("williamboman/mason.nvim")
-    use("williamboman/mason-lspconfig.nvim")
+    use({
+        "mason-org/mason-lspconfig.nvim",
+        tag = "v2.0.0"
+    })
     use("hrsh7th/nvim-cmp")
     use("hrsh7th/cmp-nvim-lsp")
     use("L3MON4D3/LuaSnip")
@@ -59,6 +62,11 @@ require("packer").startup(function(use)
     use("rcarriga/nvim-dap-ui")
     use("jay-babu/mason-nvim-dap.nvim")
     use("nvim-neotest/nvim-nio")
+    use("kosayoda/nvim-lightbulb")
+    use("stevearc/dressing.nvim")
+    use("b0o/schemastore.nvim")
+    use("someone-stole-my-name/yaml-companion.nvim")
+    use({ "akinsho/toggleterm.nvim", tag = "*" })
     if packer_bootstrap then require("packer").sync() end
 end)
 
@@ -124,18 +132,77 @@ vim.keymap.set("n", "<leader>lg", ":LazyGit<CR>")
 vim.keymap.set("n", "<leader>xx", "<cmd>TroubleToggle<cr>")
 
 ------------------------------------------------------------
--- Mason + LSP
+-- LSP Lightbulb
+------------------------------------------------------------
+vim.cmd([[autocmd CursorHold,CursorHoldI * lua require'nvim-lightbulb'.update_lightbulb()]])
+
+-------------------------------------------------------------
+-- ToggleTerm
+-------------------------------------------------------------
+require("toggleterm").setup({
+    size = 20,
+    open_mapping = [[<c-\>]],
+    shade_filetypes = {},
+    shade_terminals = true,
+    shading_factor = 2,
+    direction = "float", -- или "horizontal", "vertical"
+    float_opts = {
+        border = "curved",
+    },
+})
+
+
+
+------------------------------------------------------------
+-- Mason + LSP (Burke Full Manual Control)
 ------------------------------------------------------------
 require("mason").setup()
-require("mason-lspconfig").setup()
+
+require("mason-lspconfig").setup({
+    ensure_installed = { "yamlls" },
+    automatic_installation = true,
+    automatic_setup = true,
+})
+
 local lspconfig = require("lspconfig")
 local capabilities = require("cmp_nvim_lsp").default_capabilities()
 
+-- Manual setups
 lspconfig.volar.setup({ capabilities = capabilities })
 lspconfig.tailwindcss.setup({ capabilities = capabilities })
 lspconfig.csharp_ls.setup({
     cmd = { vim.fn.expand("~/.dotnet/tools/csharp-ls") },
     capabilities = capabilities,
+})
+lspconfig.rust_analyzer.setup({ capabilities = capabilities })
+lspconfig.gopls.setup({ capabilities = capabilities })
+
+-- YAML special case → moraš koristiti on_attach
+lspconfig.yamlls.setup({
+    capabilities = capabilities,
+    on_attach = function(client, bufnr)
+        client.config.settings = vim.tbl_deep_extend("force", client.config.settings, {
+            yaml = {
+                schemas = require("schemastore").yaml.schemas(),
+                validate = true,
+                hover = true,
+                completion = true,
+            },
+        })
+        client.notify("workspace/didChangeConfiguration", { settings = client.config.settings })
+    end,
+})
+
+------------------------------------------------------------
+-- LSP Diagnostics virtual text
+------------------------------------------------------------
+vim.diagnostic.config({
+    virtual_text = {
+        prefix = "●", -- Marker on the left of the line (can be changed to → or  or * etc.)
+    },
+    signs = true,
+    underline = true,
+    update_in_insert = false,
 })
 
 ------------------------------------------------------------
@@ -187,7 +254,40 @@ require("alpha").setup(require("alpha.themes.dashboard").config)
 ------------------------------------------------------------
 -- Noice
 ------------------------------------------------------------
-require("noice").setup({})
+require("noice").setup({
+    lsp = {
+        override = {
+            ["vim.lsp.util.convert_input_to_markdown_lines"] = true,
+            ["vim.lsp.util.stylize_markdown"] = true,
+            ["cmp.entry.get_documentation"] = true,
+        },
+        progress = {
+            enabled = true
+        },
+        signature = {
+            enabled = true
+        },
+        hover = {
+            enabled = true
+        },
+        message = {
+            enabled = true
+        }
+    },
+    presets = {
+        command_palette = true,
+        lsp_doc_border = true,
+    },
+})
+
+vim.lsp.handlers["textDocument/codeAction"] = vim.lsp.with(vim.lsp.handlers["textDocument/codeAction"], {
+    border = "rounded"
+})
+
+------------------------------------------------------------
+-- Dressing
+------------------------------------------------------------
+require("dressing").setup()
 
 ------------------------------------------------------------
 -- DAP + DAP UI
@@ -195,16 +295,64 @@ require("noice").setup({})
 local dap = require("dap")
 local dapui = require("dapui")
 
+-- Rust DAP (codelldb)
+local codelldb_path = vim.fn.stdpath("data") .. "/mason/packages/codelldb/extension/adapter/codelldb"
+dap.adapters.codelldb = {
+    type = 'server',
+    port = "${port}",
+    executable = {
+        command = codelldb_path,
+        args = { "--port", "${port}" },
+    }
+}
+dap.configurations.rust = {
+    {
+        name = "Launch Rust",
+        type = "codelldb",
+        request = "launch",
+        program = function()
+            return vim.fn.input('Path to executable: ', vim.fn.getcwd() .. '/target/debug/', 'file')
+        end,
+        cwd = '${workspaceFolder}',
+        stopOnEntry = false,
+        args = {},
+    },
+}
+
+-- Go DAP (delve)
+dap.adapters.go = function(callback, config)
+    local handle
+    local pid_or_err
+    local port = 38697
+    handle, pid_or_err = vim.loop.spawn("dlv", {
+        args = { "dap", "-l", "127.0.0.1:" .. port },
+        detached = true
+    }, function(code)
+        handle:close()
+    end)
+    vim.defer_fn(function()
+        callback({ type = "server", host = "127.0.0.1", port = port })
+    end, 100)
+end
+dap.configurations.go = {
+    {
+        type = "go",
+        name = "Debug Go",
+        request = "launch",
+        program = "${file}",
+    },
+}
+
+-- C# DAP
 dap.adapters.coreclr = {
     type = 'executable',
     command = vim.fn.expand("~/.local/bin/netcoredbg"),
     args = { '--interpreter=vscode' }
 }
-
 dap.configurations.cs = {
     {
         type = "coreclr",
-        name = "Launch - netcoredbg",
+        name = "Launch C#",
         request = "launch",
         program = function()
             return vim.fn.input('Path to dll: ', vim.fn.getcwd() .. '/bin/Debug/net7.0/', 'file')
@@ -213,7 +361,6 @@ dap.configurations.cs = {
 }
 
 dapui.setup()
-
 dap.listeners.after.event_initialized["dapui_config"] = function() dapui.open() end
 dap.listeners.before.event_terminated["dapui_config"] = function() dapui.close() end
 dap.listeners.before.event_exited["dapui_config"] = function() dapui.close() end
@@ -229,6 +376,47 @@ vim.keymap.set("n", "<leader>b", function() dap.toggle_breakpoint() end)
 vim.keymap.set("n", "<leader>dr", function() dap.repl.toggle() end)
 vim.keymap.set("n", "<leader>dl", function() dap.run_last() end)
 vim.keymap.set("n", "<leader>du", function() dapui.toggle() end)
+
+------------------------------------------------------------
+-- Burke Dev Mode - DAP Shortcuts per language
+------------------------------------------------------------
+
+-- Rust Debug
+vim.keymap.set("n", "<leader>rr", function()
+    require("dap").run(dap.configurations.rust[1])
+end, { desc = "Rust Debug Start" })
+
+-- Go Debug
+vim.keymap.set("n", "<leader>gr", function()
+    require("dap").run(dap.configurations.go[1])
+end, { desc = "Go Debug Start" })
+
+-- C# Debug
+vim.keymap.set("n", "<leader>cr", function()
+    require("dap").run(dap.configurations.cs[1])
+end, { desc = "C# Debug Start" })
+
+vim.keymap.set("n", "<leader>la", vim.lsp.buf.code_action, { desc = "LSP Code Action" })
+vim.keymap.set("n", "<leader>lr", vim.lsp.buf.rename, { desc = "LSP Rename" })
+vim.keymap.set("n", "<leader>lh", vim.lsp.buf.signature_help, { desc = "LSP Signature Help" })
+vim.keymap.set("n", "<leader>lf", vim.lsp.buf.format, { desc = "LSP Format" })
+vim.keymap.set("n", "<leader>ld", vim.diagnostic.open_float, { desc = "LSP Diagnostic Float" })
+vim.keymap.set("n", "<leader>lD", vim.lsp.buf.declaration, { desc = "LSP Declaration" })
+vim.keymap.set("n", "<leader>li", vim.lsp.buf.implementation, { desc = "LSP Implementation" })
+vim.keymap.set("n", "K", vim.lsp.buf.hover, { desc = "LSP Hover Docs" })
+vim.keymap.set("n", "<leader>lR", vim.lsp.buf.references, { desc = "LSP References" })
+vim.keymap.set("n", "<leader>lS", vim.lsp.buf.signature_help, { desc = "LSP Signature Help" })
+vim.keymap.set("n", "<leader>lws", vim.lsp.buf.workspace_symbol, { desc = "LSP Workspace Symbol" })
+
+------------------------------------------------------------
+-- LSP Format on Save
+------------------------------------------------------------
+vim.api.nvim_create_autocmd("BufWritePre", {
+    pattern = "*",
+    callback = function()
+        vim.lsp.buf.format({ async = false })
+    end,
+})
 
 ------------------------------------------------------------
 -- Reload init.lua on save
